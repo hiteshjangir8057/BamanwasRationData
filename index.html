@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ration Data Pro - Full Sheet Translator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+Devanagari:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        @font-face { font-family: 'Krutidev010'; src: url('https://fonts.cdnfonts.com/s/14897/K10.woff') format('woff'); }
+        
+        .kruti-font { font-family: 'Krutidev010', Arial !important; font-size: 1.3rem !important; line-height: 1; }
+        .hindi-font { font-family: 'Noto Sans Devanagari', sans-serif; font-size: 0.95rem; font-weight: 700; }
+        .eng-font { font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 700; text-transform: capitalize; color: #1e293b; letter-spacing: 0.02em; }
+        
+        .table-wrap { flex: 1; overflow: auto; background: white; border-top: 1px solid #e2e8f0; }
+        th { background: #f1f5f9; color: #475569; font-weight: 800; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 10px !important; position: sticky; top: 0; z-index: 20; border-right: 1px solid #e2e8f0; }
+        td { border-bottom: 1px solid #f1f5f9; padding: 6px 10px !important; font-size: 0.85rem; border-right: 1px solid #f1f5f9; white-space: nowrap; }
+        tr:hover { background-color: #f0f7ff !important; cursor: pointer; }
+        
+        .thumb-img { width: 50px; height: 50px; object-fit: cover; border-radius: 6px; border: 1px solid #e2e8f0; }
+        .no-col { width: 50px; text-align: center; font-weight: 800; color: #4f46e5; background: #fafafa; }
+
+        .modal-box { max-height: 90vh; width: 95%; max-width: 1000px; display: flex; flex-direction: column; background: white; border-radius: 20px; overflow: hidden; position: relative; }
+        @media (min-width: 768px) { .modal-box { flex-direction: row; height: 80vh; } }
+        
+        .photo-container { background: #f8fafc; overflow: hidden; display: flex; align-items: center; justify-content: center; position: relative; min-height: 300px; }
+        #mPhoto { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); max-width: 100%; max-height: 100%; }
+
+        .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="loader" class="fixed inset-0 bg-white flex flex-col items-center justify-center z-[500]">
+        <div class="w-10 h-10 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin"></div>
+        <p class="mt-4 font-bold text-slate-400 text-[10px] uppercase tracking-[0.2em]">Processing Database...</p>
+    </div>
+
+    <div class="bg-white shadow-sm z-30">
+        <div class="px-4 py-2 border-b flex justify-between items-center flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+                <div class="w-1 h-5 bg-indigo-600 rounded-full"></div>
+                <h1 class="text-xs font-black uppercase tracking-tighter">Bamanwas <span class="text-indigo-600 font-bold">RationDB</span></h1>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <span class="text-[10px] font-bold text-slate-400 uppercase hidden md:block">Sheet View:</span>
+                <select id="globalTranslate" onchange="changeSheetLanguage()" class="text-xs font-bold border border-slate-300 rounded-lg px-2 py-1.5 outline-none focus:border-indigo-500 bg-white shadow-sm cursor-pointer">
+                    <option value="default">📄 Default View</option>
+                    <option value="unicode">🌐 All To Unicode (Hindi)</option>
+                    <option value="krutidev">⌨️ All To Krutidev</option>
+                    <option value="english">🇺🇸 All To English</option>
+                </select>
+                <span id="rowCount" class="text-[9px] font-bold text-slate-400 bg-slate-50 px-2 py-1.5 rounded">Rows: 0</span>
+            </div>
+        </div>
+
+        <div class="p-3 grid grid-cols-1 md:grid-cols-12 gap-3">
+            <div class="md:col-span-8 grid grid-cols-3 gap-2">
+                <div class="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                    <p class="text-[8px] font-bold text-slate-400 uppercase">Input</p>
+                    <div id="oEng" class="text-[11px] font-bold truncate">-</div>
+                </div>
+                <div class="bg-indigo-50 p-2 rounded-lg border border-indigo-100 border-l-4 border-l-indigo-500">
+                    <p class="text-[8px] font-bold text-indigo-400 uppercase">Hindi</p>
+                    <div id="oUni" class="text-[11px] font-bold text-indigo-700 hindi-font truncate">-</div>
+                </div>
+                <div class="bg-orange-50 p-2 rounded-lg border border-orange-100 border-l-4 border-l-orange-500">
+                    <p class="text-[8px] font-bold text-orange-400 uppercase">Kruti</p>
+                    <div id="oKru" class="text-lg text-orange-600 kruti-font truncate">-</div>
+                </div>
+            </div>
+            <div class="md:col-span-4 relative">
+                <input type="text" id="mSearch" autocomplete="off" spellcheck="false"
+                    placeholder="सर्च करें..." 
+                    class="w-full h-full p-3 pl-10 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium">
+                <span class="absolute left-3.5 top-3.5 text-slate-300">🔍</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-wrap custom-scroll">
+        <table class="w-full text-left border-collapse">
+            <thead id="tH"></thead>
+            <tbody id="tB"></tbody>
+        </table>
+    </div>
+
+    <div id="modal" onclick="handleOutsideClick(event)" class="fixed inset-0 bg-slate-900/90 backdrop-blur-sm z-[200] hidden flex items-center justify-center p-2">
+        <div class="modal-box shadow-2xl animate-in fade-in zoom-in duration-200">
+            <button onclick="closeModal()" class="absolute top-4 right-4 z-50 bg-white/80 hover:bg-rose-500 hover:text-white text-slate-500 w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <div class="w-full md:w-1/2 photo-container p-6">
+                <img id="mPhoto" src="" onerror="this.src='https://ui-avatars.com/api/?name=User&size=400'">
+                <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-black/20 backdrop-blur-md p-2 rounded-full">
+                    <button onclick="zoomImg(0.2)" class="text-white hover:text-indigo-300 p-1"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M12 4v16m8-8H4"></path></svg></button>
+                    <button onclick="zoomImg(-0.2)" class="text-white hover:text-indigo-300 p-1"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M20 12H4"></path></svg></button>
+                    <button onclick="resetZoom()" class="text-white text-[10px] font-bold px-2">RESET</button>
+                </div>
+            </div>
+            <div class="w-full md:w-1/2 p-6 overflow-y-auto custom-scroll bg-white">
+                <div class="mb-4">
+                    <h2 class="text-lg font-black text-slate-800 uppercase italic">Member Details</h2>
+                    <div id="mID" class="text-[10px] font-bold text-indigo-600 tracking-widest bg-indigo-50 px-2 py-0.5 rounded inline-block"></div>
+                </div>
+                <div id="mDetails" class="grid grid-cols-1 gap-3"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+// Key Maps
+const kMap = {"a":"ं","s":"े","d":"क","f":"ि","g":"ह","h":"ी","j":"र","k":"ा","l":"स",";":"य","'":"श","q":"ु","w":"ू","e":"म","r":"त","t":"ज","y":"ल","u":"न","i":"प","o":"व","p":"च","[":"ख","]":",","z":"्र","x":"ग","c":"ब","v":"अ","b":"इ","n":"द","m":"उ",",":"ए",".":"ण","/":"ध","A":"।","S":"ै","D":"क्","F":"थ","G":"ळ","H":"भ","J":"श्र","K":"ज्ञ","L":"ष्","Q":"फ","W":"ॅ","E":"म्","R":"त्","T":"ज्","Y":"ल्","U":"न्","I":"प्","O":"व्","P":"च्","{":"ख्","}":"।","Z":"र्","X":"ग्","C":"ब्","V":"ट","B":"ठ","N":"छ","M":"ड","<":"ढ",">":"झ","?":"घ"};
+const uniToKruMap = {"अ":"v","आ":"vk","इ":"b","ई":"B","उ":"m","ऊ":"M","ए":",","ऐ":";","ओ":"vkS","औ":"vkSं","क":"d","ख":"[","ग":"x","घ":"?","च":"p","छ":"N","ज":"t","झ":">","ट":"V","ठ":"B","ड":"M","ढ":"<","ण":".","त":"r","थ":"F","द":"n","ध":"/","न":"u","प":"i","फ":"Q","ब":"c","भ":"H","म":"e","य":";","र":"j","ल":"y","व":"o","श":"'","ष":"\"","स":"y","ह":"g","ा":"k","ि":"f","ी":"h","ु":"q","ू":"w","े":"s","ै":"S","ो":"ks","ौ":"kS","ं":"a"};
+
+// Enhanced Unicode Hindi to English Phonetic Algorithm Map
+const hToEMap = {
+    'अ':'a','आ':'a','इ':'i','ई':'ee','उ':'u','ऊ':'oo','ए':'e','ऐ':'ai','ओ':'o','औ':'au','ऋ':'ri',
+    'क':'k','ख':'kh','ग':'g','घ':'gh','ङ':'n',
+    'च':'ch','छ':'chh','ज':'j','झ':'jh','ञ':'n',
+    'ट':'t','ठ':'th','ड':'d','ढ':'dh','ण':'n',
+    'त':'t','थ':'th','द':'d','ध':'dh','न':'n',
+    'प':'p','फ':'ph','ब':'b','भ':'bh','म':'m',
+    'य':'y','र':'r','ल':'l','व':'v','श':'sh','ष':'sh','स':'s','ह':'h',
+    'ा':'a','ि':'i','ी':'ee','ु':'u','ू':'oo','े':'e','ै':'ai','ो':'o','ौ':'au','ं':'n','ः':'h','ृ':'ri','्':'', '़':'', 'ँ':'n'
+};
+
+const imgBase = "https://raw.githubusercontent.com/hiteshjangir8057/BamanwasRationData/refs/heads/main/";
+let masterData = [], headers = [], searchIndex = [], currentZoom = 1, currentLanguageMode = "default";
+
+window.onload = async () => {
+    try {
+        const response = await fetch("https://raw.githubusercontent.com/hiteshjangir8057/BamanwasRationData/main/Ration%20Data%20Bamanwas.xlsx");
+        const workbook = XLSX.read(new Uint8Array(await response.arrayBuffer()), {type: 'array'});
+        const raw = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], {header: 1});
+        if(raw.length > 0) {
+            headers = raw[0]; masterData = raw.slice(1);
+            searchIndex = masterData.map(r => r.join(" ").toLowerCase());
+            render(headers, masterData);
+            document.getElementById('rowCount').innerText = `Total: ${masterData.length}`;
+            document.getElementById('loader').classList.add('hidden');
+        }
+    } catch (e) { alert("Load Error!"); }
+};
+
+function convertToUnicode(text) {
+    if (!text) return "";
+    return text.toString().split('').map(c => kMap[c] || c).join('');
+}
+
+function convertToKruti(text) {
+    if (!text) return "";
+    let res = "";
+    for (let c of text.toString()) res += uniToKruMap[c] || c;
+    return res.replace(/([d-z])f/g, 'f$1');
+}
+
+// Highly Optimized English Translation Algorithm
+function translateToEnglish(text) {
+    if (!text) return "";
+    let str = text.toString().trim();
+    
+    // Auto-detect Krutidev and convert to Unicode first
+    if (/[a-z;\[\]\']/.test(str) && !/[\u0900-\u097F]/.test(str) && !/^\d+$/.test(str)) {
+        str = convertToUnicode(str);
+    }
+    
+    let result = "";
+    for (let i = 0; i < str.length; i++) {
+        let char = str[i];
+        let nextChar = str[i+1] || "";
+        
+        // Skip specific marks
+        if (char === '्' || char === '़') continue;
+
+        let eng = hToEMap[char] || char;
+        
+        // Consonant logic for implicit 'a'
+        if (/[\u0915-\u0939]/.test(char)) { 
+            // Don't add 'a' if next is a vowel-sign (matra), halant, space, or end of string
+            if (!/[\u093E-\u094D]/.test(nextChar) && nextChar !== "" && nextChar !== " ") {
+                eng += 'a'; 
+            }
+        }
+        result += eng;
+    }
+    return result.toLowerCase();
+}
+
+function changeSheetLanguage() {
+    currentLanguageMode = document.getElementById('globalTranslate').value;
+    render(headers, masterData);
+}
+
+function render(h, rows) {
+    const th = document.getElementById('tH'), tb = document.getElementById('tB');
+    const noIdx = h.indexOf("NO.");
+    
+    let headHtml = `<tr class="bg-slate-50">`;
+    if (noIdx !== -1) headHtml += `<th class="no-col">NO.</th>`;
+    headHtml += `<th>Photo</th>`;
+    h.forEach(col => { if(col !== "NO.") headHtml += `<th>${col}</th>`; });
+    th.innerHTML = headHtml + `</tr>`;
+
+    let bodyHtml = "";
+    for(let i=0; i < rows.length; i++) {
+        const row = rows[i];
+        let id12 = row.find(v => /^\d{12}$/.test(v)) || "";
+        bodyHtml += `<tr onclick='openRowModal(${JSON.stringify(row).replace(/'/g, "&apos;")})'>`;
+        if (noIdx !== -1) bodyHtml += `<td class="no-col font-black">${row[noIdx] || ''}</td>`;
+        bodyHtml += `<td><img src="${imgBase}${id12}.jpg" class="thumb-img" onerror="this.src='https://ui-avatars.com/api/?name=NA&size=50'"></td>`;
+        
+        h.forEach((col, idx) => {
+            if (col !== "NO.") {
+                let v = (row[idx] || "").toString();
+                const isH = /[\u0900-\u097F]/.test(v);
+                let style = "";
+
+                if (currentLanguageMode === "unicode") {
+                    if(!isH && !/^\d{12}$/.test(v)) v = convertToUnicode(v);
+                    style = 'hindi-font text-indigo-900';
+                } else if (currentLanguageMode === "krutidev") {
+                    if(isH) v = convertToKruti(v);
+                    style = 'kruti-font text-slate-500';
+                } else if (currentLanguageMode === "english") {
+                    if(!/^\d{12}$/.test(v)) v = translateToEnglish(v);
+                    style = 'eng-font';
+                } else {
+                    style = isH ? 'hindi-font text-indigo-900' : 'kruti-font text-slate-500';
+                }
+
+                if(/^\d{12}$/.test(v.toString().replace(/<[^>]*>/g, ""))) {
+                    v = `<span class="text-emerald-600 font-bold">${v}</span>`;
+                    style = "";
+                }
+                bodyHtml += `<td class="${style}">${v}</td>`;
+            }
+        });
+        bodyHtml += `</tr>`;
+    }
+    tb.innerHTML = bodyHtml;
+}
+
+function openRowModal(row) {
+    resetZoom();
+    const modal = document.getElementById('modal'), mDetails = document.getElementById('mDetails'), mPhoto = document.getElementById('mPhoto');
+    let id12 = row.find(v => /^\d{12}$/.test(v)) || "000000000000";
+    document.getElementById('mID').innerText = id12;
+    mPhoto.src = `${imgBase}${id12}.jpg`;
+
+    mDetails.innerHTML = headers.map((h, i) => {
+        let val = row[i] || '-';
+        let fStyle = "";
+        if (currentLanguageMode === "unicode") {
+            if(!/[\u0900-\u097F]/.test(val) && !/^\d{12}$/.test(val)) val = convertToUnicode(val);
+            fStyle = 'hindi-font';
+        } else if (currentLanguageMode === "krutidev") {
+            if(/[\u0900-\u097F]/.test(val)) val = convertToKruti(val);
+            fStyle = 'kruti-font';
+        } else if (currentLanguageMode === "english") {
+            if(!/^\d{12}$/.test(val)) val = translateToEnglish(val);
+            fStyle = 'eng-font';
+        } else {
+            fStyle = /[\u0900-\u097F]/.test(val) ? 'hindi-font' : 'kruti-font';
+        }
+        return `
+            <div class="flex justify-between items-center border-b border-slate-50 pb-2">
+                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">${h}</span>
+                <span class="text-sm font-bold text-slate-800 ${fStyle}">${val}</span>
+            </div>
+        `;
+    }).join('');
+    modal.classList.remove('hidden');
+}
+
+function zoomImg(val) { currentZoom += val; if(currentZoom < 1) currentZoom = 1; document.getElementById('mPhoto').style.transform = `scale(${currentZoom})`; }
+function resetZoom() { currentZoom = 1; document.getElementById('mPhoto').style.transform = `scale(1)`; }
+function closeModal() { document.getElementById('modal').classList.add('hidden'); }
+function handleOutsideClick(e) { if (e.target.id === 'modal') closeModal(); }
+
+async function getH(txt) {
+    if(!txt || txt.length < 2) return txt;
+    try {
+        const r = await fetch(`https://inputtools.google.com/request?text=${txt}&itc=hi-t-i0-und&num=1&cp=0&cs=1&ie=utf-8&oe=utf-8&app=demopage`);
+        const d = await r.json(); return d[1][0][1][0];
+    } catch { return txt; }
+}
+
+let timer;
+document.getElementById('mSearch').addEventListener('input', (e) => {
+    const val = e.target.value, kKeys = val.split('').map(c => kMap[c] || c).join('');
+    document.getElementById('oEng').innerText = val || '-';
+    document.getElementById('oKru').innerText = kKeys || '-';
+    clearTimeout(timer);
+    const runS = (ex = "") => {
+        const res = masterData.filter((_, i) => searchIndex[i].includes(val.toLowerCase()) || searchIndex[i].includes(kKeys) || (ex && searchIndex[i].includes(ex)));
+        render(headers, res);
+    };
+    runS();
+    timer = setTimeout(async () => {
+        const h = await getH(val);
+        document.getElementById('oUni').innerText = h || '-';
+        document.getElementById('oKru').innerText = convertToKruti(h) || kKeys;
+        runS(h);
+    }, 100);
+});
+</script>
+</body>
+</html>
